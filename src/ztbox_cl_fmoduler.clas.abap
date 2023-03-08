@@ -36,49 +36,51 @@ public section.
   methods EXCEPTION
     returning
       value(R_EXCEPT) type TY_FUNCT_EXCEPT .
+  methods FREE .
 protected section.
-PRIVATE SECTION.
+private section.
 
-  TYPES:
+  types:
     ty_generic_types_t TYPE RANGE OF rs38l_typ .
-  TYPES:
+  types:
     BEGIN OF ty_passed_params,
       parameter TYPE fupararef-parameter,
       param_obj TYPE REF TO ztbox_cl_fmod_param,
     END OF ty_passed_params .
-  TYPES:
+  types:
     ty_passed_params_t TYPE TABLE OF ty_passed_params WITH DEFAULT KEY .
-  TYPES ty_signature_t TYPE TABLE OF fupararef WITH DEFAULT KEY.
+  types:
+    ty_signature_t TYPE TABLE OF fupararef WITH DEFAULT KEY .
 
-  DATA _except_table TYPE abap_func_excpbind_tab .
-  DATA _function_name TYPE funcname .
-  DATA _errors TYPE string_table .
-  CLASS-DATA _generic_types TYPE ty_generic_types_t .
-  DATA _signature TYPE ty_signature_t .
-  CONSTANTS c_status_active TYPE r3state VALUE 'A' ##NO_TEXT.
-  DATA _passed_params TYPE ty_passed_params_t .
-  DATA _exception TYPE ty_funct_except .
+  data _EXCEPT_TABLE type ABAP_FUNC_EXCPBIND_TAB .
+  data _FUNCTION_NAME type FUNCNAME .
+  data _ERRORS type STRING_TABLE .
+  class-data _GENERIC_TYPES type TY_GENERIC_TYPES_T .
+  data _SIGNATURE type TY_SIGNATURE_T .
+  constants C_STATUS_ACTIVE type R3STATE value 'A' ##NO_TEXT.
+  data _PASSED_PARAMS type TY_PASSED_PARAMS_T .
+  data _EXCEPTION type TY_FUNCT_EXCEPT .
 
-  METHODS _set_signature .
-  METHODS _add_error
-    IMPORTING
-      !i_err TYPE string OPTIONAL .
-  CLASS-METHODS _set_generic_types .
-  METHODS _set_exceptions .
-  METHODS _set_parameters .
-  METHODS _get_kind
-    IMPORTING
-      !i_kind       TYPE rs38l_kind
-    RETURNING
-      VALUE(r_kind) TYPE i .
-  CLASS-METHODS _get_value_reference
-    IMPORTING
-      !i_sign      TYPE fupararef
-    RETURNING
-      VALUE(r_ref) TYPE REF TO data .
-  METHODS _get_std_msg
-    RETURNING
-      VALUE(r_msg) TYPE string .
+  methods _SET_SIGNATURE .
+  methods _ADD_ERROR
+    importing
+      !I_ERR type STRING optional .
+  class-methods _SET_GENERIC_TYPES .
+  methods _SET_EXCEPTIONS .
+  methods _SET_PARAMETERS .
+  methods _GET_KIND
+    importing
+      !I_KIND type RS38L_KIND
+    returning
+      value(R_KIND) type I .
+  class-methods _GET_VALUE_REFERENCE
+    importing
+      !I_SIGN type FUPARAREF
+    returning
+      value(R_REF) type ref to DATA .
+  methods _GET_STD_MSG
+    returning
+      value(R_MSG) type STRING .
 ENDCLASS.
 
 
@@ -295,6 +297,16 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
       CREATE DATA r_ref TYPE (i_sign-structure).
 
     ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD free.
+
+    CLEAR:
+      function_parameters,
+      _errors,
+      _passed_params.
 
   ENDMETHOD.
 ENDCLASS.
