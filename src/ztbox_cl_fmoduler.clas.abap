@@ -99,7 +99,7 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
 
   METHOD execute.
 
-    CLEAR _errors.
+    CLEAR: _errors, _exception.
 
     _set_parameters( ).
 
