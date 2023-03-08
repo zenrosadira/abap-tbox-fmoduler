@@ -19,13 +19,11 @@ public section.
   data FUNCTION_PARAMETERS type ABAP_FUNC_PARMBIND_TAB .
 
   class-methods CLASS_CONSTRUCTOR .
-  methods EXECUTE
-    exporting
-      !EV_RC type SY-SUBRC .
+  methods EXECUTE .
   methods CONSTRUCTOR
     importing
       !I_FUNCTION_NAME type FUNCNAME .
-  methods GET_ERRORS
+  methods GET_TECHNICAL_ERRORS
     returning
       value(R_ERRS) type STRING_TABLE .
   methods GET_PARAM
@@ -54,17 +52,15 @@ private section.
 
   data _EXCEPT_TABLE type ABAP_FUNC_EXCPBIND_TAB .
   data _FUNCTION_NAME type FUNCNAME .
-  data _ERRORS type STRING_TABLE .
+  data _TECHNICAL_EXCEPTIONS type STRING_TABLE .
   class-data _GENERIC_TYPES type TY_GENERIC_TYPES_T .
   data _SIGNATURE type TY_SIGNATURE_T .
   constants C_STATUS_ACTIVE type R3STATE value 'A' ##NO_TEXT.
   data _PASSED_PARAMS type TY_PASSED_PARAMS_T .
   data _EXCEPTION type TY_FUNCT_EXCEPT .
+  data _EXCEPTIONS_HANDLER type ref to OBJECT .
 
   methods _SET_SIGNATURE .
-  methods _ADD_ERROR
-    importing
-      !I_ERR type STRING optional .
   class-methods _SET_GENERIC_TYPES .
   methods _SET_EXCEPTIONS .
   methods _SET_PARAMETERS .
@@ -101,13 +97,12 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
 
   METHOD execute.
 
-    CLEAR: _errors, _exception.
+    CLEAR: _technical_exceptions, _exception.
 
     _set_parameters( ).
 
     TRY.
 
-        CLEAR ev_rc.
         CALL FUNCTION _function_name PARAMETER-TABLE function_parameters EXCEPTION-TABLE _except_table.
         IF sy-subrc NE 0.
 
@@ -116,37 +111,12 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
             except  = _except_table[ value = sy-subrc ]-name
             message = _get_std_msg( ) ).
 
-          ev_rc = sy-subrc.
-
         ENDIF.
 
-      CATCH cx_root INTO DATA(lx_root).
-        _add_error( lx_root->get_text( ) ).
+      CATCH cx_root INTO DATA(x_root).
+        _technical_exceptions = VALUE #( ( x_root->get_text( ) ) ).
 
     ENDTRY.
-
-  ENDMETHOD.
-
-
-  METHOD get_errors.
-
-    r_errs = _errors.
-
-  ENDMETHOD.
-
-
-  METHOD _add_error.
-
-    IF i_err IS SUPPLIED.
-
-      INSERT i_err INTO TABLE _errors.
-
-    ELSE.
-
-      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 INTO DATA(lv_err).
-      INSERT lv_err INTO TABLE _errors.
-
-    ENDIF.
 
   ENDMETHOD.
 
@@ -305,8 +275,15 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
 
     CLEAR:
       function_parameters,
-      _errors,
+      _technical_exceptions,
       _passed_params.
+
+  ENDMETHOD.
+
+
+  METHOD get_technical_errors.
+
+    r_errs = _technical_exceptions.
 
   ENDMETHOD.
 ENDCLASS.
