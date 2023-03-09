@@ -23,6 +23,9 @@ Run function by calling EXECUTE method.
 ```
 function->execute( ).
 
+DATA batch_created TYPE charg_d.
+function->importing( EXPORTING i_name = 'BATCH' CHANGING c_value = batch_created ).
+
 LOOP AT t_return INTO DATA(ret).
  WRITE: ret-message, /.
 ENDLOOP.
@@ -33,3 +36,6 @@ Use EXCEPTION method to access the possible exception raised by the function
 DATA(exception) = function->exception( ).
 WRITE: |Exception code: { exception-subrc } - Exception name: { exception-except } - Exception message: { exception-message }|.
 ```
+
+## Installation
+Install this project using [abapGit](https://abapgit.org/) ![abapGit](https://docs.abapgit.org/img/favicon.png)
