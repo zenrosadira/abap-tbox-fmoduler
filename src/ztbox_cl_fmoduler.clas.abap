@@ -1,9 +1,7 @@
 class ZTBOX_CL_FMODULER definition
   public
   final
-  create public
-
-  global friends ZTBOX_CL_FMOD_PARAM .
+  create public .
 
 public section.
 
@@ -26,11 +24,20 @@ public section.
   methods GET_TECHNICAL_ERRORS
     returning
       value(R_ERRS) type STRING_TABLE .
-  methods GET_PARAM
+  methods IMPORTING
     importing
       !I_NAME type RS38L_PAR_
-    returning
-      value(R_RES) type ref to ZTBOX_CL_FMOD_PARAM .
+    changing
+      !C_VALUE type ANY .
+  methods CHANGING
+    importing
+      !I_NAME type RS38L_PAR_
+    changing
+      !C_VALUE type ANY .
+  methods EXPORTING
+    importing
+      !I_NAME type RS38L_PAR_
+      !I_VALUE type ANY .
   methods EXCEPTION
     returning
       value(R_EXCEPT) type TY_FUNCT_EXCEPT .
@@ -39,31 +46,25 @@ protected section.
 private section.
 
   types:
-    ty_generic_types_t TYPE RANGE OF rs38l_typ .
-  types:
-    BEGIN OF ty_passed_params,
-      parameter TYPE fupararef-parameter,
-      param_obj TYPE REF TO ztbox_cl_fmod_param,
-    END OF ty_passed_params .
-  types:
-    ty_passed_params_t TYPE TABLE OF ty_passed_params WITH DEFAULT KEY .
-  types:
     ty_signature_t TYPE TABLE OF fupararef WITH DEFAULT KEY .
 
   data _EXCEPT_TABLE type ABAP_FUNC_EXCPBIND_TAB .
   data _FUNCTION_NAME type FUNCNAME .
   data _TECHNICAL_EXCEPTIONS type STRING_TABLE .
-  class-data _GENERIC_TYPES type TY_GENERIC_TYPES_T .
+  class-data:
+    _GENERIC_TYPES TYPE RANGE OF rs38l_typ .
   data _SIGNATURE type TY_SIGNATURE_T .
   constants C_STATUS_ACTIVE type R3STATE value 'A' ##NO_TEXT.
-  data _PASSED_PARAMS type TY_PASSED_PARAMS_T .
   data _EXCEPTION type TY_FUNCT_EXCEPT .
-  data _EXCEPTIONS_HANDLER type ref to OBJECT .
+  data _IMPORTING_PARAMS type TY_SIGNATURE_T .
+  data _EXPORTING_PARAMS type TY_SIGNATURE_T .
+  data _CHANGING_PARAMS type TY_SIGNATURE_T .
+  data _EXECUTION_DONE type FLAG .
 
   methods _SET_SIGNATURE .
   class-methods _SET_GENERIC_TYPES .
   methods _SET_EXCEPTIONS .
-  methods _SET_PARAMETERS .
+  methods _SET_EXP_PARAMETERS .
   methods _GET_KIND
     importing
       !I_KIND type RS38L_KIND
@@ -77,6 +78,12 @@ private section.
   methods _GET_STD_MSG
     returning
       value(R_MSG) type STRING .
+  methods _CREATE_REFERENCE
+    importing
+      !I_SIGN type FUPARAREF
+      !I_VALUE type ANY
+    returning
+      value(R_REF) type ref to DATA .
 ENDCLASS.
 
 
@@ -92,14 +99,14 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
 
     _set_exceptions( ).
 
+    _set_exp_parameters( ).
+
   ENDMETHOD.
 
 
   METHOD execute.
 
-    CLEAR: _technical_exceptions, _exception.
-
-    _set_parameters( ).
+    CLEAR: _technical_exceptions, _exception, _execution_done.
 
     TRY.
 
@@ -110,6 +117,10 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
             subrc   = sy-subrc
             except  = _except_table[ value = sy-subrc ]-name
             message = _get_std_msg( ) ).
+
+        ELSE.
+
+          _execution_done = abap_true.
 
         ENDIF.
 
@@ -129,6 +140,19 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
       FROM fupararef INTO CORRESPONDING FIELDS OF TABLE @_signature
       WHERE funcname EQ @_function_name
         AND r3state  EQ @c_status_active.
+
+    LOOP AT _signature INTO DATA(sign).
+
+      CASE sign-paramtype.
+        WHEN 'C' OR 'T'.
+          APPEND sign TO _changing_params.
+        WHEN 'I'.
+          APPEND sign TO _importing_params.
+        WHEN 'E'.
+          APPEND sign TO _exporting_params.
+      ENDCASE.
+
+    ENDLOOP.
 
   ENDMETHOD.
 
@@ -179,6 +203,7 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
 
     _generic_types = VALUE #( sign = 'I' option = 'EQ'
       ( low = 'ANY' )
+      ( low = 'OBJECT' )
       ( low = 'ANY TABLE' )
       ( low = 'HASHED TABLE' )
       ( low = 'INDEX TABLE' )
@@ -200,17 +225,6 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD _set_parameters.
-
-    function_parameters = VALUE #(
-      FOR param IN _passed_params
-      ( name  = param-parameter
-        value = param-param_obj->_value
-        kind  = _get_kind( param-param_obj->_sign-paramtype ) ) ).
-
-  ENDMETHOD.
-
-
   METHOD class_constructor.
 
     _set_generic_types( ).
@@ -221,17 +235,6 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
   METHOD exception.
 
     r_except = _exception.
-
-  ENDMETHOD.
-
-
-  METHOD get_param.
-
-    DATA(sign) = _signature[ parameter = i_name ].
-
-    r_res = NEW #(
-      i_sign  = sign
-      i_fmod  = me ).
 
   ENDMETHOD.
 
@@ -276,7 +279,7 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
     CLEAR:
       function_parameters,
       _technical_exceptions,
-      _passed_params.
+      _execution_done.
 
   ENDMETHOD.
 
@@ -284,6 +287,84 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
   METHOD get_technical_errors.
 
     r_errs = _technical_exceptions.
+
+  ENDMETHOD.
+
+
+  METHOD changing.
+
+    DATA(sign) = _changing_params[ parameter = i_name ].
+
+    INSERT VALUE #(
+      name  = sign-parameter
+      kind  = _get_kind( sign-paramtype )
+      value = REF #( c_value )  ) INTO TABLE function_parameters.
+
+  ENDMETHOD.
+
+
+  METHOD exporting.
+
+    DATA(sign) = _importing_params[ parameter = i_name ].
+
+    INSERT VALUE #(
+      name  = sign-parameter
+      kind  = _get_kind( sign-paramtype )
+      value = _create_reference(
+        i_sign  = sign
+        i_value = i_value ) ) INTO TABLE function_parameters.
+
+  ENDMETHOD.
+
+
+  METHOD importing.
+
+    DATA(sign) = _exporting_params[ parameter = i_name ].
+
+    READ TABLE function_parameters ASSIGNING FIELD-SYMBOL(<param>)
+      WITH KEY
+        name  = sign-parameter
+        kind  = _get_kind( sign-paramtype ).
+    IF sy-subrc EQ 0 AND <param>-value IS BOUND.
+
+      IF _execution_done EQ abap_true.
+        c_value = <param>-value->*.
+      ELSE.
+        <param>-value = REF #( c_value ).
+      ENDIF.
+
+    ELSE.
+
+      INSERT VALUE #(
+        name  = sign-parameter
+        kind  = _get_kind( sign-paramtype )
+        value = REF #( c_value ) ) INTO TABLE function_parameters.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD _create_reference.
+
+    r_ref = _get_value_reference( i_sign ).
+
+    IF r_ref IS NOT BOUND.
+      CREATE DATA r_ref LIKE i_value.
+    ENDIF.
+
+    r_ref->* = i_value.
+
+  ENDMETHOD.
+
+
+  METHOD _SET_EXP_PARAMETERS.
+
+    function_parameters = VALUE #( BASE function_parameters
+      FOR _exp IN _exporting_params WHERE ( structure NOT IN _generic_types )
+      ( name = _exp-parameter
+        kind  = abap_func_importing
+        value = _get_value_reference( _exp ) ) ).
 
   ENDMETHOD.
 ENDCLASS.
