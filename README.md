@@ -1,7 +1,7 @@
-## ABAP Dynamic Function Module
+# ABAP Dynamic Function Module
 A technical tool designed to easily manage dynamic ABAP Function Module calls.
 
-# Usage
+## Usage
 Create new object of class ZTBOX_CL_FMODULER passing function module name.
 ```
 DATA(function) = NEW ztbox_cl_fmoduler( 'BAPI_BATCH_CREATE' ).
