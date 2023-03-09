@@ -191,6 +191,10 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
     ENDLOOP.
 
     _except_table = VALUE #( BASE _except_table (
+      name  = 'OTHERS'
+      value = lines( _except_table ) + 1 ) ).
+
+    _except_table = VALUE #( BASE _except_table (
       name  = 'ERROR_MESSAGE'
       value = -1 ) ).
 
