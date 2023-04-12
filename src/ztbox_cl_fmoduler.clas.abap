@@ -91,6 +91,25 @@ ENDCLASS.
 CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
 
 
+  METHOD changing.
+
+    DATA(sign) = _changing_params[ parameter = i_name ].
+
+    INSERT VALUE #(
+      name  = sign-parameter
+      kind  = _get_kind( sign-paramtype )
+      value = REF #( c_value )  ) INTO TABLE function_parameters.
+
+  ENDMETHOD.
+
+
+  METHOD class_constructor.
+
+    _set_generic_types( ).
+
+  ENDMETHOD.
+
+
   METHOD constructor.
 
     _function_name = i_function_name.
@@ -100,6 +119,13 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
     _set_exceptions( ).
 
     _set_exp_parameters( ).
+
+  ENDMETHOD.
+
+
+  METHOD exception.
+
+    r_except = _exception.
 
   ENDMETHOD.
 
@@ -132,27 +158,76 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD _set_signature.
+  METHOD exporting.
 
-    CLEAR _signature.
+    DATA(sign) = _importing_params[ parameter = i_name ].
 
-    SELECT *
-      FROM fupararef INTO CORRESPONDING FIELDS OF TABLE @_signature
-      WHERE funcname EQ @_function_name
-        AND r3state  EQ @c_status_active.
+    INSERT VALUE #(
+      name  = sign-parameter
+      kind  = _get_kind( sign-paramtype )
+      value = _create_reference(
+        i_sign  = sign
+        i_value = i_value ) ) INTO TABLE function_parameters.
 
-    LOOP AT _signature INTO DATA(sign).
+  ENDMETHOD.
 
-      CASE sign-paramtype.
-        WHEN 'C' OR 'T'.
-          APPEND sign TO _changing_params.
-        WHEN 'I'.
-          APPEND sign TO _importing_params.
-        WHEN 'E'.
-          APPEND sign TO _exporting_params.
-      ENDCASE.
 
-    ENDLOOP.
+  METHOD free.
+
+    CLEAR:
+      function_parameters,
+      _technical_exceptions,
+      _execution_done.
+
+  ENDMETHOD.
+
+
+  METHOD get_technical_errors.
+
+    r_errs = _technical_exceptions.
+
+  ENDMETHOD.
+
+
+  METHOD importing.
+
+    DATA(sign) = _exporting_params[ parameter = i_name ].
+
+    READ TABLE function_parameters ASSIGNING FIELD-SYMBOL(<param>)
+      WITH KEY
+        name  = sign-parameter
+        kind  = _get_kind( sign-paramtype ).
+    IF sy-subrc EQ 0 AND <param>-value IS BOUND.
+
+      IF _execution_done EQ abap_true.
+        ASSIGN <param>-value->* TO FIELD-SYMBOL(<val>).
+        c_value = <val>.
+      ELSE.
+        <param>-value = REF #( c_value ).
+      ENDIF.
+
+    ELSE.
+
+      INSERT VALUE #(
+        name  = sign-parameter
+        kind  = _get_kind( sign-paramtype )
+        value = REF #( c_value ) ) INTO TABLE function_parameters.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD _create_reference.
+
+    r_ref = _get_value_reference( i_sign ).
+
+    IF r_ref IS NOT BOUND.
+      CREATE DATA r_ref LIKE i_value.
+    ENDIF.
+
+    ASSIGN r_ref->* TO FIELD-SYMBOL(<val>).
+    <val> = i_value.
 
   ENDMETHOD.
 
@@ -174,71 +249,6 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
         r_kind = abap_func_tables.
 
     ENDCASE.
-
-  ENDMETHOD.
-
-
-  METHOD _set_exceptions.
-
-    SORT _signature BY paramtype DESCENDING.
-
-    LOOP AT _signature INTO DATA(excep) WHERE paramtype EQ abap_true.
-
-      _except_table = VALUE #( BASE _except_table (
-        name  = excep-parameter
-        value = sy-tabix ) ).
-
-    ENDLOOP.
-
-    _except_table = VALUE #( BASE _except_table (
-      name  = 'OTHERS'
-      value = lines( _except_table ) + 1 ) ).
-
-    _except_table = VALUE #( BASE _except_table (
-      name  = 'ERROR_MESSAGE'
-      value = -1 ) ).
-
-    DELETE _signature WHERE paramtype EQ abap_true.
-
-  ENDMETHOD.
-
-
-  METHOD _set_generic_types.
-
-    _generic_types = VALUE #( sign = 'I' option = 'EQ'
-      ( low = 'ANY' )
-      ( low = 'OBJECT' )
-      ( low = 'ANY TABLE' )
-      ( low = 'HASHED TABLE' )
-      ( low = 'INDEX TABLE' )
-      ( low = 'STANDARD TABLE' )
-      ( low = 'SORTED TABLE' )
-      ( low = 'TABLE' )
-      ( low = 'DATA' )
-      ( low = 'NUMERIC' )
-      ( low = 'CLIKE' )
-      ( low = 'CSEQUENCE' )
-      ( low = 'XSEQUENCE' )
-      ( low = 'SIMPLE' )
-      ( low = 'DECFLOAT' )
-      ( low = 'C' )
-      ( low = 'N' )
-      ( low = 'P' )
-      ( low = 'X' ) ).
-
-  ENDMETHOD.
-
-
-  METHOD class_constructor.
-
-    _set_generic_types( ).
-
-  ENDMETHOD.
-
-
-  METHOD exception.
-
-    r_except = _exception.
 
   ENDMETHOD.
 
@@ -278,86 +288,27 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD free.
+  METHOD _set_exceptions.
 
-    CLEAR:
-      function_parameters,
-      _technical_exceptions,
-      _execution_done.
+    SORT _signature BY paramtype DESCENDING.
 
-  ENDMETHOD.
+    LOOP AT _signature INTO DATA(excep) WHERE paramtype EQ abap_true.
 
+      _except_table = VALUE #( BASE _except_table (
+        name  = excep-parameter
+        value = sy-tabix ) ).
 
-  METHOD get_technical_errors.
+    ENDLOOP.
 
-    r_errs = _technical_exceptions.
+    _except_table = VALUE #( BASE _except_table (
+      name  = 'OTHERS'
+      value = lines( _except_table ) + 1 ) ).
 
-  ENDMETHOD.
+    _except_table = VALUE #( BASE _except_table (
+      name  = 'ERROR_MESSAGE'
+      value = -1 ) ).
 
-
-  METHOD changing.
-
-    DATA(sign) = _changing_params[ parameter = i_name ].
-
-    INSERT VALUE #(
-      name  = sign-parameter
-      kind  = _get_kind( sign-paramtype )
-      value = REF #( c_value )  ) INTO TABLE function_parameters.
-
-  ENDMETHOD.
-
-
-  METHOD exporting.
-
-    DATA(sign) = _importing_params[ parameter = i_name ].
-
-    INSERT VALUE #(
-      name  = sign-parameter
-      kind  = _get_kind( sign-paramtype )
-      value = _create_reference(
-        i_sign  = sign
-        i_value = i_value ) ) INTO TABLE function_parameters.
-
-  ENDMETHOD.
-
-
-  METHOD importing.
-
-    DATA(sign) = _exporting_params[ parameter = i_name ].
-
-    READ TABLE function_parameters ASSIGNING FIELD-SYMBOL(<param>)
-      WITH KEY
-        name  = sign-parameter
-        kind  = _get_kind( sign-paramtype ).
-    IF sy-subrc EQ 0 AND <param>-value IS BOUND.
-
-      IF _execution_done EQ abap_true.
-        c_value = <param>-value->*.
-      ELSE.
-        <param>-value = REF #( c_value ).
-      ENDIF.
-
-    ELSE.
-
-      INSERT VALUE #(
-        name  = sign-parameter
-        kind  = _get_kind( sign-paramtype )
-        value = REF #( c_value ) ) INTO TABLE function_parameters.
-
-    ENDIF.
-
-  ENDMETHOD.
-
-
-  METHOD _create_reference.
-
-    r_ref = _get_value_reference( i_sign ).
-
-    IF r_ref IS NOT BOUND.
-      CREATE DATA r_ref LIKE i_value.
-    ENDIF.
-
-    r_ref->* = i_value.
+    DELETE _signature WHERE paramtype EQ abap_true.
 
   ENDMETHOD.
 
@@ -369,6 +320,57 @@ CLASS ZTBOX_CL_FMODULER IMPLEMENTATION.
       ( name = _exp-parameter
         kind  = abap_func_importing
         value = _get_value_reference( _exp ) ) ).
+
+  ENDMETHOD.
+
+
+  METHOD _set_generic_types.
+
+    _generic_types = VALUE #( sign = 'I' option = 'EQ'
+      ( low = 'ANY' )
+      ( low = 'OBJECT' )
+      ( low = 'ANY TABLE' )
+      ( low = 'HASHED TABLE' )
+      ( low = 'INDEX TABLE' )
+      ( low = 'STANDARD TABLE' )
+      ( low = 'SORTED TABLE' )
+      ( low = 'TABLE' )
+      ( low = 'DATA' )
+      ( low = 'NUMERIC' )
+      ( low = 'CLIKE' )
+      ( low = 'CSEQUENCE' )
+      ( low = 'XSEQUENCE' )
+      ( low = 'SIMPLE' )
+      ( low = 'DECFLOAT' )
+      ( low = 'C' )
+      ( low = 'N' )
+      ( low = 'P' )
+      ( low = 'X' ) ).
+
+  ENDMETHOD.
+
+
+  METHOD _set_signature.
+
+    CLEAR _signature.
+
+    SELECT *
+      FROM fupararef INTO CORRESPONDING FIELDS OF TABLE @_signature
+      WHERE funcname EQ @_function_name
+        AND r3state  EQ @c_status_active.
+
+    LOOP AT _signature INTO DATA(sign).
+
+      CASE sign-paramtype.
+        WHEN 'C' OR 'T'.
+          APPEND sign TO _changing_params.
+        WHEN 'I'.
+          APPEND sign TO _importing_params.
+        WHEN 'E'.
+          APPEND sign TO _exporting_params.
+      ENDCASE.
+
+    ENDLOOP.
 
   ENDMETHOD.
 ENDCLASS.
